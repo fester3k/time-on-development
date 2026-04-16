@@ -12,6 +12,7 @@ services:
       - GH_TOKEN=                     # <- PAT z uprawnieniem read:org + read:project
       - GH_GRAPHQL_URL=https://api.github.com/graphql  # <- dla GHES: https://ghes.example.com/api/graphql
       - WEBHOOK_SECRET=               # <- opcjonalny, ten sam co w ustawieniach webhooka w GH
+      - ALLOWED_PROJECTS=             # <- PVT_aaa,PVT_bbb,...  (puste = akceptuj wszystkie)
 
 volumes:
   cycle-data:
