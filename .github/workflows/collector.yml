@@ -1,0 +1,62 @@
+name: Cycle Time Collector
+
+on:
+  projects_v2_item:
+    types: [edited]
+  issues:
+    types: [closed]
+
+jobs:
+  collect:
+    runs-on: self-hosted
+    env:
+      SERVICE_URL: http://cycle-monitor:8080   # <- adres serwisu
+      STATE_X: "In Progress"                   # <- nazwa stanu X
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Record left-X transition
+        if: github.event_name == 'projects_v2_item'
+        run: |
+          PREV=$(echo '${{ toJson(github.event.changes.field_value.from) }}' | jq -r '.name // empty')
+          [ "$PREV" != "$STATE_X" ] && echo "Not a transition from $STATE_X, skipping." && exit 0
+
+          ITEM_ID="${{ github.event.projects_v2_item.node_id }}"
+          DATA=$(gh api graphql -f query='
+            query($id: ID!) {
+              node(id: $id) {
+                ... on ProjectV2Item {
+                  content {
+                    ... on Issue {
+                      id
+                      number
+                      repository { nameWithOwner }
+                    }
+                  }
+                }
+              }
+            }' -f id="$ITEM_ID")
+
+          NODE_ID=$(echo "$DATA" | jq -r '.data.node.content.id')
+          NUM=$(echo "$DATA"     | jq -r '.data.node.content.number')
+          REPO=$(echo "$DATA"    | jq -r '.data.node.content.repository.nameWithOwner')
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          curl -sf -X POST "$SERVICE_URL/event" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg  nid  "$NODE_ID" \
+              --argjson num "$NUM" \
+              --arg  repo "$REPO" \
+              --arg  ts   "$NOW" \
+              '{type:"left_x", issue_node_id:$nid, issue_number:$num, repo:$repo, timestamp:$ts}')"
+
+      - name: Record issue closed
+        if: github.event_name == 'issues'
+        run: |
+          curl -sf -X POST "$SERVICE_URL/event" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg nid "${{ github.event.issue.node_id }}" \
+              --arg ts  "${{ github.event.issue.closed_at }}" \
+              '{type:"closed", issue_node_id:$nid, timestamp:$ts}')"

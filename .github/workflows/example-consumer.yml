@@ -1,0 +1,28 @@
+name: Example — użycie query z innego workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        required: true
+      repo:
+        required: true
+        default: "org/my-repo"
+
+jobs:
+  get-cycle-time:
+    uses: ./.github/workflows/query.yml
+    with:
+      issue_number: ${{ inputs.issue_number }}
+      repo: ${{ inputs.repo }}
+
+  use-cycle-time:
+    needs: get-cycle-time
+    runs-on: self-hosted
+    steps:
+      - name: Print result
+        run: |
+          echo "Dane issue:"
+          echo '${{ needs.get-cycle-time.outputs.result_json }}' | jq .
+          echo ""
+          echo "Czas trwania: ${{ needs.get-cycle-time.outputs.duration_seconds }} sekund"

@@ -1,0 +1,72 @@
+name: Query Cycle Time
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Numer issue"
+        required: false
+      repo:
+        description: "Repo (org/repo)"
+        required: false
+      issue_node_id:
+        description: "Issue node_id (IC_kw...) — alternatywa dla number+repo"
+        required: false
+
+  workflow_call:
+    inputs:
+      issue_number:
+        type: string
+        required: false
+      repo:
+        type: string
+        required: false
+      issue_node_id:
+        type: string
+        required: false
+    outputs:
+      result_json:
+        description: "Pełny obiekt JSON z danymi issue"
+        value: ${{ jobs.query.outputs.result_json }}
+      duration_seconds:
+        description: "Czas trwania w sekundach (null jeśli issue jeszcze otwarte)"
+        value: ${{ jobs.query.outputs.duration_seconds }}
+      left_x_at:
+        description: "Timestamp ostatniego wyjścia ze stanu X"
+        value: ${{ jobs.query.outputs.left_x_at }}
+      closed_at:
+        description: "Timestamp zamknięcia issue"
+        value: ${{ jobs.query.outputs.closed_at }}
+
+jobs:
+  query:
+    runs-on: self-hosted
+    env:
+      SERVICE_URL: http://cycle-monitor:8080
+    outputs:
+      result_json:      ${{ steps.fetch.outputs.result_json }}
+      duration_seconds: ${{ steps.fetch.outputs.duration_seconds }}
+      left_x_at:        ${{ steps.fetch.outputs.left_x_at }}
+      closed_at:        ${{ steps.fetch.outputs.closed_at }}
+
+    steps:
+      - name: Fetch from service
+        id: fetch
+        run: |
+          if [ -n "${{ inputs.issue_node_id }}" ]; then
+            URL="$SERVICE_URL/issue/${{ inputs.issue_node_id }}"
+          else
+            URL="$SERVICE_URL/issue?number=${{ inputs.issue_number }}&repo=${{ inputs.repo }}"
+          fi
+
+          RESULT=$(curl -sf "$URL")
+          echo "result_json=$RESULT"                                        >> $GITHUB_OUTPUT
+          echo "duration_seconds=$(echo "$RESULT" | jq '.duration_seconds')" >> $GITHUB_OUTPUT
+          echo "left_x_at=$(echo "$RESULT"        | jq -r '.left_x_at')"    >> $GITHUB_OUTPUT
+          echo "closed_at=$(echo "$RESULT"        | jq -r '.closed_at')"    >> $GITHUB_OUTPUT
+
+          DUR=$(echo "$RESULT" | jq '.duration_seconds // 0')
+          echo "### Cycle time" >> $GITHUB_STEP_SUMMARY
+          echo "- **Left X at**: $(echo "$RESULT" | jq -r '.left_x_at')"  >> $GITHUB_STEP_SUMMARY
+          echo "- **Closed at**: $(echo "$RESULT" | jq -r '.closed_at')"  >> $GITHUB_STEP_SUMMARY
+          echo "- **Duration**: $((DUR / 3600))h $((DUR % 3600 / 60))m"   >> $GITHUB_STEP_SUMMARY
