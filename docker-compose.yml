@@ -8,6 +8,10 @@ services:
       - cycle-data:/data
     environment:
       - DB_PATH=/data/cycle.db
+      - STATE_X=In Progress           # <- nazwa stanu X w GH Project
+      - GH_TOKEN=                     # <- PAT z uprawnieniem read:org + read:project
+      - GH_GRAPHQL_URL=https://api.github.com/graphql  # <- dla GHES: https://ghes.example.com/api/graphql
+      - WEBHOOK_SECRET=               # <- opcjonalny, ten sam co w ustawieniach webhooka w GH
 
 volumes:
   cycle-data:
